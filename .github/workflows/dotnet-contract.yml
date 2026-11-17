@@ -1,0 +1,65 @@
+name: Reusable .NET SDK contract regression
+
+on:
+  workflow_call:
+    inputs:
+      spec-directory:
+        description: Directory containing OpenAPI JSON specs
+        type: string
+        default: specs/openapi
+      sdk-project:
+        description: Path to the caller's SDK project file
+        type: string
+        required: true
+      assembly:
+        description: Optional SDK assembly name (auto-discovered by default)
+        type: string
+        default: ''
+      client-class:
+        description: Optional public SDK facade class (auto-discovered by default)
+        type: string
+        default: ''
+      config-class:
+        description: Optional SDK configuration class (auto-discovered by default)
+        type: string
+        default: ''
+      base-urls:
+        description: Optional JSON mapping overriding inferred configuration base URL paths
+        type: string
+        default: '{}'
+      token-property:
+        description: Configuration property for the bearer token
+        type: string
+        default: AccessToken
+      include-errors:
+        description: Include declared 4xx responses
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 10.0.x
+      - name: Run OpenAPI contract tests
+        uses: $/.github/actions/contract-test
+        env:
+          CONTRACT_DOTNET_SDK_PROJECT: ${{ inputs.sdk-project }}
+          CONTRACT_DOTNET_ASSEMBLY: ${{ inputs.assembly }}
+          CONTRACT_DOTNET_CLIENT_CLASS: ${{ inputs.client-class }}
+          CONTRACT_DOTNET_CONFIG_CLASS: ${{ inputs.config-class }}
+          CONTRACT_DOTNET_BASE_URLS: ${{ inputs.base-urls }}
+          CONTRACT_DOTNET_TOKEN_PROPERTY: ${{ inputs.token-property }}
+        with:
+          spec-directory: ${{ inputs.spec-directory }}
+          include-errors: ${{ inputs.include-errors }}
+          adapter-command: dotnet run --project "$CONTRACT_ACTION_PATH/../../../tools/contract-test/adapters/dotnet/ContractAdapter.csproj" -p:ContractSdkProject="$GITHUB_WORKSPACE/$CONTRACT_DOTNET_SDK_PROJECT"

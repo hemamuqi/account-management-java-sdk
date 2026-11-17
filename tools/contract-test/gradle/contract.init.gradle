@@ -1,0 +1,35 @@
+import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.compile.JavaCompile
+
+def adapterSource = System.getenv('CONTRACT_JAVA_ADAPTER_SOURCE')
+if (!adapterSource) {
+    throw new GradleException('CONTRACT_JAVA_ADAPTER_SOURCE must point to the shared Java adapter sources')
+}
+def sdkProjectPath = System.getenv('CONTRACT_SDK_PROJECT') ?: ':'
+
+gradle.beforeProject { project ->
+    if (project.path != sdkProjectPath) {
+        return
+    }
+    project.pluginManager.withPlugin('java') {
+        def sdkMain = project.extensions.getByType(org.gradle.api.tasks.SourceSetContainer).getByName('main')
+        project.tasks.withType(JavaCompile).configureEach {
+            options.compilerArgs.add('-parameters')
+        }
+        def compileAdapter = project.tasks.register('compileContractAdapter', JavaCompile) {
+            source = project.fileTree(adapterSource) { include '**/*.java' }
+            classpath = sdkMain.runtimeClasspath
+            destinationDirectory.set(project.layout.buildDirectory.dir('classes/java/contractAdapter'))
+            options.release.set(17)
+            dependsOn(project.tasks.named('classes'))
+        }
+        project.tasks.register('contractTestAdapter', JavaExec) {
+            group = 'verification'
+            description = 'Runs the shared Java SDK contract adapter.'
+            dependsOn(compileAdapter)
+            classpath = project.files(compileAdapter.flatMap { it.destinationDirectory }) + sdkMain.runtimeClasspath
+            mainClass.set('sdk.contract.ContractAdapter')
+            environment('CONTRACT_SDK_CLASSES', sdkMain.output.classesDirs.asPath)
+        }
+    }
+}

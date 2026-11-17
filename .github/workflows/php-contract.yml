@@ -1,0 +1,65 @@
+name: Reusable PHP SDK contract regression
+
+on:
+  workflow_call:
+    inputs:
+      spec-directory:
+        description: Directory containing OpenAPI JSON specs
+        type: string
+        default: specs/openapi
+      client-class:
+        description: Optional public SDK facade class (auto-discovered by default)
+        type: string
+        default: ''
+      config-class:
+        description: Optional SDK configuration class (auto-discovered by default)
+        type: string
+        default: ''
+      base-urls:
+        description: Optional JSON object overriding inferred configuration base URL paths
+        type: string
+        default: '{}'
+      token-argument:
+        description: Name of the configuration constructor's token parameter
+        type: string
+        default: accessToken
+      php-version:
+        description: PHP version to use
+        type: string
+        default: '8.5'
+      include-errors:
+        description: Include declared 4xx responses
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: ${{ inputs.php-version }}
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Run OpenAPI contract tests
+        uses: $/.github/actions/contract-test
+        env:
+          CONTRACT_PHP_CLIENT_CLASS: ${{ inputs.client-class }}
+          CONTRACT_PHP_CONFIG_CLASS: ${{ inputs.config-class }}
+          CONTRACT_PHP_BASE_URLS: ${{ inputs.base-urls }}
+          CONTRACT_PHP_TOKEN_ARGUMENT: ${{ inputs.token-argument }}
+        with:
+          spec-directory: ${{ inputs.spec-directory }}
+          adapter-command: php "$CONTRACT_ACTION_PATH/../../../tools/contract-test/adapters/php/adapter.php"
+          include-errors: ${{ inputs.include-errors }}

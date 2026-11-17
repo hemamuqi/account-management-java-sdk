@@ -1,0 +1,44 @@
+name: SDK contract regression
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'specs/openapi/**'
+      - 'tools/contract-test/**'
+      - '.github/actions/contract-test/**'
+      - '.github/workflows/contract-regression.yml'
+      - '.github/workflows/java-contract.yml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.lockfile'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'specs/openapi/**'
+      - 'tools/contract-test/**'
+      - '.github/actions/contract-test/**'
+      - '.github/workflows/contract-regression.yml'
+      - '.github/workflows/java-contract.yml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.lockfile'
+  workflow_dispatch:
+    inputs:
+      include-errors:
+        description: Include declared 4xx responses (currently reports known SDK mismatches)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    uses: ./.github/workflows/java-contract.yml
+    with:
+      include-errors: ${{ inputs.include-errors || false }}

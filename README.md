@@ -225,6 +225,12 @@ try {
 ./gradlew publish  # Publish
 ```
 
+## Contract Regression
+
+Pull requests changing the SDK or OpenAPI specs run a local-mock contract check
+against all REST operations. See [the contract test guide](tools/contract-test/README.md)
+for local runs and the adapter protocol used by other language SDKs.
+
 ## Specs
 
 - `sell_account_v1_oas3.yaml` — Sell Account V1

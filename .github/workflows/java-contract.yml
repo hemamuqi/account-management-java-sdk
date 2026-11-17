@@ -1,0 +1,53 @@
+name: Reusable Java SDK contract regression
+
+on:
+  workflow_call:
+    inputs:
+      spec-directory:
+        description: Directory containing OpenAPI JSON specs
+        type: string
+        default: specs/openapi
+      sdk-project:
+        description: Gradle project path containing the Java SDK
+        type: string
+        default: ':'
+      client-class:
+        description: Optional fully qualified SDK facade class (auto-discovered by default)
+        type: string
+        default: ''
+      config-class:
+        description: Optional fully qualified SDK configuration class (auto-discovered by default)
+        type: string
+        default: ''
+      include-errors:
+        description: Include declared 4xx responses
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - uses: $/.github/actions/contract-test
+        env:
+          CONTRACT_SDK_PROJECT: ${{ inputs.sdk-project }}
+          CONTRACT_JAVA_CLIENT_CLASS: ${{ inputs.client-class }}
+          CONTRACT_JAVA_CONFIG_CLASS: ${{ inputs.config-class }}
+        with:
+          spec-directory: ${{ inputs.spec-directory }}
+          adapter-command: ./gradlew --init-script "$CONTRACT_GRADLE_INIT_SCRIPT" "${CONTRACT_SDK_PROJECT%:}:contractTestAdapter" --no-daemon --quiet
+          include-errors: ${{ inputs.include-errors }}
