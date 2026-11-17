@@ -1,0 +1,77 @@
+name: OpenAPI SDK contract test
+description: Generate mock responses from OpenAPI and compare SDK requests and decoded responses
+inputs:
+  specs:
+    description: Space-separated paths to OpenAPI JSON specs in the caller workspace
+    required: false
+  spec-directory:
+    description: Directory in the caller workspace to scan recursively for OpenAPI JSON files
+    required: false
+  sdk-project:
+    description: Gradle project path containing the Java SDK (defaults to the root project)
+    required: false
+    default: ':'
+  adapter-command:
+    description: Command that reads CONTRACT_CASES and writes CONTRACT_RESULTS; defaults to the shared Java Gradle adapter
+    required: false
+  include-errors:
+    description: Also exercise one declared 4xx response per operation
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '22'
+    - name: Run OpenAPI contract suite
+      shell: bash
+      env:
+        CONTRACT_SPECS: ${{ inputs.specs }}
+        CONTRACT_SPEC_DIRECTORY: ${{ inputs.spec-directory }}
+        CONTRACT_SDK_PROJECT: ${{ inputs.sdk-project }}
+        CONTRACT_ADAPTER: ${{ inputs.adapter-command }}
+        CONTRACT_INCLUDE_ERRORS: ${{ inputs.include-errors }}
+        CONTRACT_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        runner_dir="$CONTRACT_ACTION_PATH/../../../tools/contract-test"
+        export CONTRACT_JAVA_ADAPTER_SOURCE="$runner_dir/adapters/java/src"
+        export CONTRACT_GRADLE_INIT_SCRIPT="$runner_dir/gradle/contract.init.gradle"
+        if [[ -z "$CONTRACT_ADAPTER" ]]; then
+          if [[ ! "$CONTRACT_SDK_PROJECT" =~ ^(:[[:alnum:]_.-]+)+$ && "$CONTRACT_SDK_PROJECT" != ':' ]]; then
+            echo "Invalid Gradle SDK project path: $CONTRACT_SDK_PROJECT" >&2
+            exit 1
+          fi
+          export CONTRACT_TASK="${CONTRACT_SDK_PROJECT%:}:contractTestAdapter"
+          CONTRACT_ADAPTER='./gradlew --init-script "$CONTRACT_GRADLE_INIT_SCRIPT" "$CONTRACT_TASK" --no-daemon --quiet'
+        fi
+        npm ci --prefix "$runner_dir" --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
+        node --test "$runner_dir/lib/test_runner.cjs"
+        spec_args=()
+        if [[ -n "$CONTRACT_SPEC_DIRECTORY" ]]; then
+          if [[ -n "$CONTRACT_SPECS" ]]; then
+            echo 'Provide either spec-directory or specs, not both' >&2
+            exit 1
+          fi
+          if [[ ! -d "$CONTRACT_SPEC_DIRECTORY" ]]; then
+            echo "Spec directory not found: $CONTRACT_SPEC_DIRECTORY" >&2
+            exit 1
+          fi
+          while IFS= read -r -d '' spec; do
+            spec_args+=(--spec "$spec")
+          done < <(find "$CONTRACT_SPEC_DIRECTORY" -type f -name '*.json' -print0 | sort -z)
+        else
+          for spec in $CONTRACT_SPECS; do
+            spec_args+=(--spec "$spec")
+          done
+        fi
+        if [[ ${#spec_args[@]} -eq 0 ]]; then
+          echo 'No OpenAPI JSON specs found; provide spec-directory or specs' >&2
+          exit 1
+        fi
+        if [[ "$CONTRACT_INCLUDE_ERRORS" == 'true' ]]; then
+          spec_args=(--errors "${spec_args[@]}")
+        fi
+        node "$runner_dir/lib/runner.cjs" \
+          "${spec_args[@]}" -- bash -lc "$CONTRACT_ADAPTER"

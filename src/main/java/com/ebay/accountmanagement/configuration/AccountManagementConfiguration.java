@@ -26,12 +26,36 @@ public final class AccountManagementConfiguration {
     private final String accountV2BaseUrl;
     private final String financesBaseUrl;
     private final String graphQLBaseUrl;
+    private final boolean localTesting;
 
     public AccountManagementConfiguration() {
+        this.localTesting = false;
         this.accountV1BaseUrl = "https://api.ebay.com/sell/account/v1";
         this.accountV2BaseUrl = "https://api.ebay.com/sell/account/v2";
         this.financesBaseUrl = "https://apiz.ebay.com/sell/finances/v1";
         this.graphQLBaseUrl = "https://api.ebay.com/graphql";
+    }
+
+    public static AccountManagementConfiguration forLocalTesting(int port) {
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException("Invalid local test port: " + port);
+        }
+        String origin = "http://127.0.0.1:" + port;
+        return new AccountManagementConfiguration(
+            origin + "/sell/account/v1",
+            origin + "/sell/account/v2",
+            origin + "/sell/finances/v1",
+            origin + "/graphql",
+            true);
+    }
+
+    private AccountManagementConfiguration(String accountV1BaseUrl, String accountV2BaseUrl,
+            String financesBaseUrl, String graphQLBaseUrl, boolean localTesting) {
+        this.localTesting = localTesting;
+        this.accountV1BaseUrl = accountV1BaseUrl;
+        this.accountV2BaseUrl = accountV2BaseUrl;
+        this.financesBaseUrl = financesBaseUrl;
+        this.graphQLBaseUrl = graphQLBaseUrl;
     }
 
     public AccountManagementConfiguration(
@@ -39,6 +63,7 @@ public final class AccountManagementConfiguration {
             String accountV2BaseUrl,
             String financesBaseUrl,
             String graphQLBaseUrl) {
+        this.localTesting = false;
         this.accountV1BaseUrl = validateHost(accountV1BaseUrl);
         this.accountV2BaseUrl = validateHost(accountV2BaseUrl);
         this.financesBaseUrl = validateHost(financesBaseUrl);
@@ -81,6 +106,9 @@ public final class AccountManagementConfiguration {
         Set<String> hosts = new HashSet<>();
         hosts.add("api.ebay.com");
         hosts.add("apiz.ebay.com");
+        if (localTesting) {
+            hosts.add("127.0.0.1");
+        }
         return hosts;
     }
 
