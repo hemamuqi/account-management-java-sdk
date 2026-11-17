@@ -1,0 +1,57 @@
+name: SDK contract regression
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'specs/openapi/**'
+      - 'tools/contract-test/**'
+      - '.github/actions/contract-test/**'
+      - '.github/workflows/contract.yml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.lockfile'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'specs/openapi/**'
+      - 'tools/contract-test/**'
+      - '.github/actions/contract-test/**'
+      - '.github/workflows/contract.yml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.lockfile'
+  workflow_dispatch:
+    inputs:
+      include-errors:
+        description: Include declared 4xx responses (currently reports known SDK mismatches)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - uses: ./.github/actions/contract-test
+        with:
+          spec-directory: specs/openapi
+          adapter-command: ./gradlew -p tools/contract-test contractTestAdapter --no-daemon --quiet
+          include-errors: ${{ inputs.include-errors || 'false' }}

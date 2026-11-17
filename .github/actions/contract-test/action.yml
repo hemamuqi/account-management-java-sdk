@@ -1,0 +1,70 @@
+name: OpenAPI SDK contract test
+description: Generate mock responses from OpenAPI and compare SDK requests and decoded responses
+inputs:
+  specs:
+    description: Space-separated paths to OpenAPI JSON specs in the caller workspace
+    required: false
+  spec-directory:
+    description: Directory in the caller workspace to scan recursively for OpenAPI JSON files
+    required: false
+  adapter-command:
+    description: Command that reads CONTRACT_CASES and writes CONTRACT_RESULTS
+    required: true
+  include-errors:
+    description: Also exercise one declared 4xx response per operation
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Run OpenAPI contract suite
+      shell: bash
+      env:
+        CONTRACT_SPECS: ${{ inputs.specs }}
+        CONTRACT_SPEC_DIRECTORY: ${{ inputs.spec-directory }}
+        CONTRACT_ADAPTER: ${{ inputs.adapter-command }}
+        CONTRACT_INCLUDE_ERRORS: ${{ inputs.include-errors }}
+        CONTRACT_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        runner_dir="$CONTRACT_ACTION_PATH/../../../tools/contract-test"
+        export CONTRACT_JAVA_ADAPTER_SOURCE="$runner_dir/adapters/java/src"
+        python3 -m venv "$RUNNER_TEMP/sdk-contract-venv"
+        "$RUNNER_TEMP/sdk-contract-venv/bin/python" -m pip install -r "$runner_dir/requirements.txt"
+        "$RUNNER_TEMP/sdk-contract-venv/bin/python" - "$runner_dir/lib" <<'PY'
+        import sys
+        import unittest
+
+        suite = unittest.defaultTestLoader.discover(sys.argv[1], pattern="test_*.py")
+        if suite.countTestCases() == 0:
+          sys.exit("No contract runner unit tests discovered")
+        sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+        PY
+        spec_args=()
+        if [[ -n "$CONTRACT_SPEC_DIRECTORY" ]]; then
+          if [[ -n "$CONTRACT_SPECS" ]]; then
+            echo 'Provide either spec-directory or specs, not both' >&2
+            exit 1
+          fi
+          if [[ ! -d "$CONTRACT_SPEC_DIRECTORY" ]]; then
+            echo "Spec directory not found: $CONTRACT_SPEC_DIRECTORY" >&2
+            exit 1
+          fi
+          while IFS= read -r -d '' spec; do
+            spec_args+=(--spec "$spec")
+          done < <(find "$CONTRACT_SPEC_DIRECTORY" -type f -name '*.json' -print0 | sort -z)
+        else
+          for spec in $CONTRACT_SPECS; do
+            spec_args+=(--spec "$spec")
+          done
+        fi
+        if [[ ${#spec_args[@]} -eq 0 ]]; then
+          echo 'No OpenAPI JSON specs found; provide spec-directory or specs' >&2
+          exit 1
+        fi
+        error_args=()
+        if [[ "$CONTRACT_INCLUDE_ERRORS" == 'true' ]]; then
+          error_args+=(--errors)
+        fi
+        "$RUNNER_TEMP/sdk-contract-venv/bin/python" "$runner_dir/lib/runner.py" \
+          "${error_args[@]}" "${spec_args[@]}" -- bash -lc "$CONTRACT_ADAPTER"

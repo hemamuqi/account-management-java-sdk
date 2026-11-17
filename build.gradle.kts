@@ -99,6 +99,7 @@ val lintRequested = gradle.startParameter.taskNames.any { it == "lint" || it.end
 
 tasks.withType<JavaCompile>().configureEach {
     inputs.property("lintRequested", lintRequested)
+    options.compilerArgs.add("-parameters")
     options.errorprone {
         isEnabled.set(lintRequested)
         disableWarningsInGeneratedCode.set(true)
