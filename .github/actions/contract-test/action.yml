@@ -17,6 +17,9 @@ inputs:
 runs:
   using: composite
   steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '22'
     - name: Run OpenAPI contract suite
       shell: bash
       env:
@@ -29,17 +32,8 @@ runs:
         set -euo pipefail
         runner_dir="$CONTRACT_ACTION_PATH/../../../tools/contract-test"
         export CONTRACT_JAVA_ADAPTER_SOURCE="$runner_dir/adapters/java/src"
-        python3 -m venv "$RUNNER_TEMP/sdk-contract-venv"
-        "$RUNNER_TEMP/sdk-contract-venv/bin/python" -m pip install -r "$runner_dir/requirements.txt"
-        "$RUNNER_TEMP/sdk-contract-venv/bin/python" - "$runner_dir/lib" <<'PY'
-        import sys
-        import unittest
-
-        suite = unittest.defaultTestLoader.discover(sys.argv[1], pattern="test_*.py")
-        if suite.countTestCases() == 0:
-          sys.exit("No contract runner unit tests discovered")
-        sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
-        PY
+        npm ci --prefix "$runner_dir" --ignore-scripts --no-audit --no-fund
+        node --test "$runner_dir/lib/test_runner.cjs"
         spec_args=()
         if [[ -n "$CONTRACT_SPEC_DIRECTORY" ]]; then
           if [[ -n "$CONTRACT_SPECS" ]]; then
@@ -66,5 +60,5 @@ runs:
         if [[ "$CONTRACT_INCLUDE_ERRORS" == 'true' ]]; then
           error_args+=(--errors)
         fi
-        "$RUNNER_TEMP/sdk-contract-venv/bin/python" "$runner_dir/lib/runner.py" \
+        node "$runner_dir/lib/runner.cjs" \
           "${error_args[@]}" "${spec_args[@]}" -- bash -lc "$CONTRACT_ADAPTER"
